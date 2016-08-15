@@ -2,3 +2,5 @@
 *.pyc
 *.csv
 /word_subs
+/data
+/src/.ropeproject/
