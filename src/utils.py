@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
 
-def split_data(input_data, batch_size, input_bills, input_labels=None, shuffle=False):
+def split_data(input_data, batch_size, input_bills=None, input_labels=None, shuffle=False):
     n = np.int64(input_data.shape[0])
 
     if shuffle:
@@ -12,14 +12,16 @@ def split_data(input_data, batch_size, input_bills, input_labels=None, shuffle=F
         
     for i in np.arange(n_batches):
         d = np.copy(input_data[i * batch_size:(i + 1) * batch_size, :])
-        b = np.copy(input_bills[i * batch_size:(i + 1) * batch_size])
+        b = None
+        l = None
+        if input_bills is not None:
+            b = np.copy(input_bills[i * batch_size:(i + 1) * batch_size])
         if input_labels is not None:
             l = np.copy(input_labels[i * batch_size:(i + 1) * batch_size])
-            yield d, b, l
-        else:
-            yield d, b
-            
 
+        yield d, b, l
+
+        
 def split_rnn(input_data, input_words, bill_ids, batch_size, window_length, input_labels=None):
     all_bills = np.sort(list(set(bill_ids)))
     bills = np.sort(list(set(bill_ids)))

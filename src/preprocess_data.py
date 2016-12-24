@@ -3,18 +3,20 @@ import numpy as np
 import pickle
 
 
-non_word_columns = range(54) + range(10024, 10047)
-word_columns = [x for x in range(10047) if x not in non_word_columns]
-cols_to_drop = [0, 1, 2, 3, 6, 7, 9, 11, 18, 28, 29, 42, 45, 46, 48, 50, 51, 52, 53] + \
-    range(30, 42) + [10024, 10025, 10026]
-feature_cols = [c for c in range(10047) if c not in cols_to_drop + word_columns]
-lab_vote = "vote"
-lab_pass = "result_x"
+non_word_columns = range(184)
+non_word_columns.append(16170)
+word_columns = [x for x in range(16171) if x not in non_word_columns]
+cols_to_drop = [0, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 38, 40, 41, 43,
+                46, 47, 48, 49, 51, 60, 62, 63, 64, 65, 66, 69, 70, 71, 72, 73, 16170]  + range(126, 184)
+feature_cols = [c for c in range(16171) if c not in cols_to_drop + word_columns]
+topic_cols = range(74, 124)
+lab_vote = "new_vote"
+lab_pass = "result"
 bill_id = "hr"
 names = "name"
 test_perc = 0.01
 valid_perc = 0.02
-path_112 = "../data/merged_count_112.csv"
+path_112 = "../data/spencer_dict_112.csv"
 
 
 def one_hot_encode(data, var_name):
@@ -44,13 +46,15 @@ def create_bill_dict(bill_ids, words):
     return dict
     
     
-def main():
+def main(bills=False, topics=False):
     print "Loading data..."
     d = read_csv(path_112)
-    
+    if not topics:
+        cols_to_drop.extend(topic_cols)
+
     # Data must be sorted correctly for everything to work
     print "Sorting and splitting..."
-    d.sort(["hr", "name"], inplace=True)
+    d.sort(["hr", "district"], inplace=True)
     w = d.ix[:, word_columns]
     f = d.ix[:, feature_cols]
 
@@ -59,7 +63,7 @@ def main():
 
     # Drop observations with votes labelled 6 and 9.
     # I assume these are abstention/absence.
-    v = f.index[f["vote"].isin([6, 9])]
+    v = f.index[~f[lab_vote].isin([0, 1])]
     w.drop(v, inplace=True)
     f.drop(v, inplace=True)
 
@@ -68,6 +72,7 @@ def main():
     print "Creating labels..."
     # Extract vote labels and pass/reject labels for a separate file
     # I do this because tensorflow wants labels in a separate array
+    f[lab_vote] = np.float32(f[lab_vote] == 1)
     vote_labels = f[lab_vote]
     
     # We only need one pass label per bill
@@ -76,19 +81,17 @@ def main():
                    for x in f[bill_id].unique()}
     
     # Now drop labels from data
-    f.drop(["vote", "result_x"], 1, inplace=True)
+    f.drop([lab_vote, lab_pass], 1, inplace=True)
 
     # Also store bill number and congressman id and drop them
-    bill_ids = f[bill_id]
-    bill_dict = {bill_ids.unique()[k]: k for k in range(len(bill_ids.unique()))}
-    b = Series([bill_dict[b] for b in bill_ids], index=f.index)
+    if bills:
+        bill_ids = f[bill_id]
+        bill_dict = {bill_ids.unique()[k]: k for k in range(len(bill_ids.unique()))}
+        b = Series([bill_dict[b] for b in bill_ids], index=f.index)
     cong_ids = f[names]
     cong_dict = {cong_ids.unique()[k]: k for k in range(len(cong_ids.unique()))}
     c = Series([cong_dict[c] for c in cong_ids], index=f.index)
     f.drop([bill_id, names], 1, inplace=True)
-    
-    # We can also drop the date since bill hr are in chronological order
-    f.drop("date", axis=1, inplace=True)
     
     # Standardize non 0/1 variables
     print "Encoding features..."
@@ -97,12 +100,13 @@ def main():
         f[v] = normalize(f[v])
 
     # encode party as 1 if republican 0 if democrat
-    f["republican"] = f["party_x"].apply(lambda x: 1.0 if x == 200 else 0.0)
-    f.drop("party_x", 1, inplace=True)
+    f["republican"] = f["party"].apply(lambda x: 1.0 if x == 200 else 0.0)
+    f.drop("party", 1, inplace=True)
 
     # one hot encoding for categorical variables
     cat_vars = f.columns[f.dtypes == "object"]
     for v in cat_vars:
+        print v
         # This function modifies the dataframe directly as a side effect
         # I'm doing it like this because the df will likely be large and I
         # don't wanna go around copying stuff too much
@@ -130,9 +134,10 @@ def main():
     assert(f.isnull().sum().sum() == 0)
 
     # Create and save bill lookup dictionary
-    bd = create_bill_dict(b, w)
-    with open("../data/bill_lookup.pickle", "wb") as of:
-        pickle.dump(bd, of)
+    if bills:
+        bd = create_bill_dict(b, w)
+        with open("../data/bill_lookup.pickle", "wb") as of:
+            pickle.dump(bd, of)
     
     # Split into training/test/validation
     test_n = np.ceil(len(f) * test_perc)
@@ -142,22 +147,33 @@ def main():
     held_out_rows = f.index[np.int64(np.arange(len(f) - test_n - valid_n, len(f)))]
     t_rows = np.random.choice(held_out_rows, np.int64(test_n))
     v_rows = np.int64([r for r in held_out_rows if r not in t_rows])
-  
-    datasets = {"test_feats": f.ix[t_rows, :],
-                "test_words": w.ix[t_rows, :],
-                "test_bills": b.ix[t_rows],
-                "test_cong": c.ix[t_rows],
-                "test_labels": vote_labels[t_rows],
-                "valid_feats": f.ix[v_rows, :],
-                "valid_words": w.ix[v_rows, :],
-                "valid_bills": b.ix[v_rows],
-                "valid_cong": c.ix[v_rows],
-                "valid_labels": vote_labels[v_rows],
-                "train_feats": f.drop(held_out_rows, 0),
-                "train_words": w.drop(held_out_rows, 0),
-                "train_bills": b.drop(held_out_rows),
-                "train_cong": c.drop(held_out_rows),
-                "train_labels": vote_labels.drop(held_out_rows)}
+
+    if bills:
+        datasets = {"test_feats": f.ix[t_rows, :],
+                    "test_words": w.ix[t_rows, :],
+                    "test_bills": b.ix[t_rows],
+                    "test_cong": c.ix[t_rows],
+                    "test_labels": vote_labels[t_rows],
+                    "valid_feats": f.ix[v_rows, :],
+                    "valid_words": w.ix[v_rows, :],
+                    "valid_bills": b.ix[v_rows],
+                    "valid_cong": c.ix[v_rows],
+                    "valid_labels": vote_labels[v_rows],
+                    "train_feats": f.drop(held_out_rows, 0),
+                    "train_words": w.drop(held_out_rows, 0),
+                    "train_bills": b.drop(held_out_rows),
+                    "train_cong": c.drop(held_out_rows),
+                    "train_labels": vote_labels.drop(held_out_rows)}
+    else:
+        datasets = {"test_feats": f.ix[t_rows, :],
+                    "test_cong": c.ix[t_rows],
+                    "test_labels": vote_labels[t_rows],
+                    "valid_feats": f.ix[v_rows, :],
+                    "valid_cong": c.ix[v_rows],
+                    "valid_labels": vote_labels[v_rows],
+                    "train_feats": f.drop(held_out_rows, 0),
+                    "train_cong": c.drop(held_out_rows),
+                    "train_labels": vote_labels.drop(held_out_rows)}
 
     print "Saving output..."
     # Convert to np array and save
@@ -165,5 +181,3 @@ def main():
         np.save("../data/" + d, datasets[d].as_matrix())
     
         
-if __name__ == "__main__":
-    main()

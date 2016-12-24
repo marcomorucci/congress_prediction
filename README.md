@@ -47,7 +47,7 @@ The network works as follows:
 2. The word vector is fed to the embedding layer, which outputs a representation vector of length 50. 
 3. The two vectors are combined into a feature vector of length 88 + 50, call it **x**
 4. This vector is fed to the hidden layer that outputs a vector **h** according to the following equation:
-$$\mathbf{h} = Sigmoid(\mathbf{xW} + \mathbf{b})$$
+[$$\mathbf{h} = Sigmoid(\mathbf{xW} + \mathbf{b})$$]])
 5. **h** is fed into a projection layer that outputs a probability vector with one entry for each class (either 1 or 0)
 $$\mathbf{\hat{y}} = Softmax(\mathbf{hU} + \mathbf{a})$$
 6. The class with the highest probability is chosen as the network's prediction. 

@@ -11,15 +11,16 @@ import pickle
 class Config(object):
     batch_size = 64
     n_samples = 90795
-    n_features = 88
+    n_features = 87
     n_classes = 2
-    max_epochs = 50
-    lr = 1e-2
-    l2 = 0.2
+    max_epochs = 100
+    lr = 1e-3
+    l2 = 0.01
     add_data_weights = True
+    hidden2_size = 64
     hidden_size = 32
     embed_size = 50
-    vocab_length = 9970
+    vocab_length = 15986
     dropout_prob = 0.1
     
     
@@ -61,19 +62,26 @@ class DeepNetModel(Model):
         
     def add_model(self, input_data):
         input_data = tf.nn.dropout(input_data, 1 - self.dropout_placeholder)
-
-        h_weights = tf.Variable(tf.random_uniform([self.config.n_features + self.config.embed_size,
-                                                  self.config.hidden_size]))
+        
+        h2_weights = tf.Variable(tf.random_uniform([self.config.embed_size + self.config.n_features,
+                                                    self.config.hidden2_size]))
+        h2_biases = tf.Variable(tf.random_uniform([self.config.hidden2_size]))
+        h2 = tf.nn.sigmoid(tf.matmul(input_data, h2_weights) + h2_biases)
+        h2 = tf.nn.dropout(h2, 1 - self.dropout_placeholder)
+        
+        h_weights = tf.Variable(tf.random_uniform([self.config.hidden2_size,
+                                                   self.config.hidden_size]))
         h_biases = tf.Variable(tf.random_uniform([self.config.hidden_size]))
         
-        h = tf.nn.sigmoid(tf.matmul(input_data, h_weights) + h_biases)
+        h = tf.nn.sigmoid(tf.matmul(h2, h_weights) + h_biases)
         h = tf.nn.dropout(h, 1 - self.dropout_placeholder)
         
         weights = tf.Variable(tf.ones([self.config.hidden_size, self.config.n_classes]))
         biases = tf.Variable(tf.ones([self.config.n_classes]))
         logits = tf.matmul(h, weights) + biases
 
-        reg = self.config.l2 * (0.5 * tf.nn.l2_loss(weights) + 0.5 * tf.nn.l2_loss(h_weights))
+        reg = self.config.l2 * (0.33 * tf.nn.l2_loss(weights) + 0.33 * tf.nn.l2_loss(h_weights) +
+                                0.33 * tf.nn.l2_loss(h2_weights))
         tf.add_to_collection("total_loss", reg)
 
         return logits
@@ -82,7 +90,7 @@ class DeepNetModel(Model):
         ratios = tf.truediv(tf.reduce_sum(self.labels_placeholder, 0),
                             tf.reduce_sum(self.labels_placeholder))
         if self.config.add_data_weights:
-            weighted_logits = tf.mul(logits, ratios)
+            weighted_logits = tf.mul(logits, tf.constant(np.array([0.6, 0.4]), tf.float32))
         else:
             weighted_logits = logits
         tf.add_to_collection("total_loss", tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
@@ -90,11 +98,9 @@ class DeepNetModel(Model):
         loss = tf.add_n(tf.get_collection("total_loss"))
         return loss
         
-    def run_epoch(self, sess, input_data, input_bills, input_labels):
+    def run_epoch(self, sess, input_data):
         avg_loss = 0
-        for step, (input_batch, bill_batch, label_batch) in enumerate(split_data(
-                input_data, batch_size=self.config.batch_size,
-                input_bills=input_bills, input_labels=input_labels)):
+        for step, (input_batch, bill_batch, label_batch) in enumerate(input_data):
             feed_dict = self.create_feed_dict(input_batch, label_batch, bill_batch,
                                               self.config.dropout_prob)
             _, loss = sess.run([self.train_op, self.loss], feed_dict=feed_dict)
@@ -102,19 +108,24 @@ class DeepNetModel(Model):
         avg_loss = avg_loss / step
         return avg_loss
         
-    def fit(self, sess, input_data, input_bills, input_labels, valid_data,
+    def fit(self, sess, input_data, input_bills, input_labels, valid_input,
             valid_bills, valid_labels):
         losses = []
         train_accuracies = []
         valid_accuracies = []
+        train_data = [d for d in split_data(
+            input_data, batch_size=self.config.batch_size,
+            input_bills=input_bills, input_labels=input_labels)]
+        valid_data = [d for d in split_data(
+            valid_input, self.config.batch_size, valid_bills, valid_labels)]
         for epoch in range(self.config.max_epochs):
             start_t = time.time()
-            avg_loss = self.run_epoch(sess, input_data, input_bills, input_labels)
+            avg_loss = self.run_epoch(sess, train_data)
             duration = time.time() - start_t
             print "Loss at epoch %d: %.2f (%.3f sec)" % (epoch, avg_loss, duration)
-            tr_acc, tr_nays = self.test_accuracy(sess, input_data, input_bills, input_labels)
+            tr_acc, tr_nays = self.test_accuracy(sess, train_data)
             print "Training accuracy %.5f, %d nays predicted" % (tr_acc, tr_nays)
-            valid_acc, valid_nays = self.test_accuracy(sess, valid_data, valid_bills, valid_labels)
+            valid_acc, valid_nays = self.test_accuracy(sess, valid_data)
             print "Validation accuracy %.5f, %d nays predicted" % (valid_acc, valid_nays)
             losses.append(avg_loss)
             train_accuracies.append(tr_acc)
@@ -130,10 +141,9 @@ class DeepNetModel(Model):
             yhat.extend(preds)
         return yhat
       
-    def test_accuracy(self, sess, data, bills, labels):
+    def test_accuracy(self, sess, data):
         differences = []
         nays = []
-        data = split_data(data, self.config.batch_size, bills, labels)
         for _, (x, b, y) in enumerate(data):
             feed = self.create_feed_dict(input_batch=x, label_batch=y, bill_batch=b, dropout=0)
             preds = sess.run(self.predictions, feed_dict=feed)
@@ -152,7 +162,7 @@ class DeepNetModel(Model):
         self.predictions = tf.nn.softmax(self.logits)
         
         
-def test_deepnet(oversample=True):
+def test_deepnet(oversample=False):
     if oversample:
         train_features = np.load("../data/oversample_feats.npy")
         train_labels = np.load("../data/oversample_labels.npy")
@@ -200,11 +210,13 @@ def test_deepnet(oversample=True):
         
 def test_on_fake_data():
     config = Config()
-    data = make_classification(config.batch_size * 1000, 88, 11, 11,
-                               n_classes=2, weights=[0.95, 0.05], n_clusters_per_class=4)
-    train_features = data[0][:57601]
+    data = make_classification(config.batch_size * 1000, 88 + 9970, 110, 110,
+                               n_classes=2, weights=[0.8, 0.2], n_clusters_per_class=8)
+    train_features = data[0][:57601, :88]
+    train_bills = data[0][:57601, 88:]
     train_labels = np.array([(x * 1, -(x - 1)) for x in data[1][:57601]])
-    valid_features = data[0][57601:]
+    valid_features = data[0][57601:, :88]
+    valid_bills = data[0][57601:, 88:]
     valid_labels = np.array([(x * 1, -(x - 1)) for x in data[1][57601:]])
     
     with tf.Graph().as_default():
@@ -212,8 +224,8 @@ def test_on_fake_data():
         sess = tf.Session()
         init = tf.initialize_all_variables()
         sess.run(init)
-        losses, tr_acc, valid_acc = model.fit(sess, train_features, train_labels,
-                                              valid_features, valid_labels)
+        losses, tr_acc, valid_acc = model.fit(sess, train_features, train_bills, train_labels,
+                                              valid_features, valid_bills, valid_labels)
         plt.figure("Accuracy")
         x = range(config.max_epochs)
         plt.plot(x, tr_acc, label="training set accuracy")
