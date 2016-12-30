@@ -7,9 +7,9 @@ non_word_columns = range(184)
 non_word_columns.append(16170)
 word_columns = [x for x in range(16171) if x not in non_word_columns]
 cols_to_drop = [0, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 38, 40, 41, 43,
-                46, 47, 48, 49, 51, 60, 62, 63, 64, 65, 66, 69, 70, 71, 72, 73, 16170]  + range(126, 184)
+                46, 47, 48, 49, 51, 60, 62, 63, 64, 65, 66, 69, 70, 71, 72, 73, 16170]  + range(126, 132) + range(182, 184)
 feature_cols = [c for c in range(16171) if c not in cols_to_drop + word_columns]
-topic_cols = range(74, 124)
+topic_cols = range(74, 124) + range(132, 182)
 lab_vote = "new_vote"
 lab_pass = "result"
 bill_id = "hr"

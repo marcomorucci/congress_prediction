@@ -2,6 +2,25 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
 
+def load_data():
+    train_features = np.load("../data/train_feats.npy")
+    train_labels = np.load("../data/train_labels.npy")
+    
+    valid_features = np.load("../data/valid_feats.npy")
+    valid_labels = np.load("../data/valid_labels.npy")
+
+    test_features = np.load("../data/test_feats.npy")
+    test_labels = np.load("../data/test_labels.npy")
+    
+    # first is yay second is nay
+    train_labels = np.array([(x * 1, -(x - 1)) for x in train_labels])
+    valid_labels = np.array([(x * 1, -(x - 1)) for x in valid_labels])
+    test_labels = np.array([(x * 1, -(x - 1)) for x in test_labels])
+    
+    return (train_features, train_labels, valid_features, valid_labels,
+            test_features, test_labels)
+
+
 def split_data(input_data, batch_size, input_bills=None, input_labels=None, shuffle=False):
     n = np.int64(input_data.shape[0])
 

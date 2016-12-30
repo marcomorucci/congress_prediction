@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from utils import SMOTE, split_data, add_oversampling, compute_tfidf
 from sklearn.datasets import make_classification
 from sklearn.metrics import roc_curve, roc_auc_score
+from utils import load_data
 
 
 class Layer(object):
@@ -31,15 +32,16 @@ class Layer(object):
 class Config(object):
     batch_size = 64
     n_samples = 90795
-    n_features = 137
+    n_features = 187
     n_classes = 2
     max_epochs = 100
     lr = 1e-2
     l2 = 0.01
-    add_data_weights = True
+    add_data_weights = False
     layers = [Layer(64, "hidden3", tf.nn.relu, tf.nn.l2_loss),
               Layer(16, "hidden2", tf.nn.relu, tf.nn.l2_loss)]
-    dropout_prob = 0.1
+    dropout_prob = 0.001
+    verbose = True
 
     
 class DeepNetModel(Model):
@@ -130,11 +132,14 @@ class DeepNetModel(Model):
             start_t = time.time()
             avg_loss = self.run_epoch(sess, train_data)
             duration = time.time() - start_t
-            print "Loss at epoch %d: %.2f (%.3f sec)" % (epoch, avg_loss, duration)
+            if self.config.verbose:
+                print "Loss at epoch %d: %.2f (%.3f sec)" % (epoch, avg_loss, duration)
             tr_acc, tr_nays, tr_fpr, tr_tpr, tr_auc = self.test_accuracy(sess, train_data)
-            print "Training accuracy %.5f, %d nays predicted, auc: %f" % (tr_acc, tr_nays, tr_auc)
+            if self.config.verbose:
+                print "Training accuracy %.5f, %d nays predicted, auc: %f" % (tr_acc, tr_nays, tr_auc)
             valid_acc, valid_nays, valid_fpr, valid_tpr, valid_auc = self.test_accuracy(sess, valid_data)
-            print "Validation accuracy %.5f, %d nays predicted, auc: %f" % (valid_acc, valid_nays, valid_auc)
+            if self.config.verbose:
+                print "Validation accuracy %.5f, %d nays predicted, auc: %f" % (valid_acc, valid_nays, valid_auc)
             self.stats["loss"].append(avg_loss)
             self.stats["train_accuracy"].append(tr_acc)
             self.stats["train_tpr"].append(tr_tpr)
@@ -190,24 +195,9 @@ class DeepNetModel(Model):
         self.predictions = tf.nn.softmax(self.logits)
         
         
-def test_deepnet(config=None):
-    train_features = np.load("../data/train_feats.npy")
-    train_labels = np.load("../data/train_labels.npy")
-    
-    valid_features = np.load("../data/valid_feats.npy")
-    valid_labels = np.load("../data/valid_labels.npy")
+def test_deepnet(config=Config()):
+    train_features, train_labels, valid_features, valid_labels, _, __ = load_data()
 
-    test_features = np.load("../data/test_feats.npy")
-    test_labels = np.load("../data/test_labels.npy")
-    
-    # first is yay second is nay
-    train_labels = np.array([(x * 1, -(x - 1)) for x in train_labels])
-    valid_labels = np.array([(x * 1, -(x - 1)) for x in valid_labels])
-    test_labels = np.array([(x * 1, -(x - 1)) for x in test_labels])
-
-    if config is None:
-        config = Config()
-        
     with tf.Graph().as_default():
         model = DeepNetModel(config)
         sess = tf.Session()
@@ -215,9 +205,15 @@ def test_deepnet(config=None):
         sess.run(init)
         model = model.fit(sess, train_features, train_labels, valid_features, valid_labels)
         return model
-        
+    
 
-def plot_stats(model, config):
+def plot_stats(model, config=Config()):
+    print "Loss value: %.3f" % model.stats["loss"][-1]
+    print "Training: accuracy = %.3f, AUC = %.3f" % (model.stats["train_accuracy"][-1],
+                                                     model.stats["train_auc"][-1])
+    print "Validation: accuracy = %.3f, AUC = %.3f" % (model.stats["valid_accuracy"][-1],
+                                                       model.stats["valid_auc"][-1])
+    
     plt.figure("Accuracy")
     x = range(config.max_epochs)
     plt.plot(x, model.stats["train_accuracy"], label="training set accuracy")
