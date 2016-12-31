@@ -12,7 +12,6 @@ to_drop = ['v1',
            'cong',
            'congress',
            'correlation',
-           'date',
            'date_voted',
            'defeat',
            'description',
@@ -47,8 +46,8 @@ to_drop = ['v1',
  
 lab_vote = "new_vote"
 bill_id = "hr"
-test_perc = 0.01
-valid_perc = 0.02
+test_perc = 0.05
+valid_perc = 0.1
 path_112_topics = "../data/just_topics_112.csv"
 
 
@@ -69,10 +68,10 @@ def process_with_topics():
     
     # Data must be sorted correctly for everything to work
     print "Sorting and splitting..."
-    f.sort(["hr", "dist"], inplace=True)
+    f.sort(["date", "dist"], inplace=True)
     
     # Drop observations with votes labelled 6 and 9.
-    # I assume these are abstention/absence.
+    # I assume  are abstention/absence.
     v = f.index[~f[lab_vote].isin([0, 1])]
     f.drop(v, inplace=True)
 
@@ -90,7 +89,7 @@ def process_with_topics():
     t_rows = np.random.choice(held_out_rows, np.int64(test_n))
     v_rows = np.int64([r for r in held_out_rows if r not in t_rows])
 
-    f.drop(["hr", "dist"], 1, inplace=True)
+    f.drop(["date", "hr", "dist"], 1, inplace=True)
     
     un1 = f["un1"]
     f.drop("un1", 1, inplace=True)
