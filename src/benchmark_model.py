@@ -6,8 +6,8 @@ from deep_net_topics import DeepNetModel, Config
 import statsmodels.discrete.discrete_model as sm
 
 
-def sklearn_logit():
-    train_f, train_l, valid_f, valid_l, _, __ = load_data()
+def sklearn_logit(unif=False):
+    train_f, train_l, valid_f, valid_l, _, __ = load_data(unif)
     model = LogisticRegression()
     model.fit(train_f, train_l[:, 0])
     train_pred = model.predict(train_f)
@@ -23,11 +23,12 @@ def sklearn_logit():
     print "Validation: accuracy = %.3f, auc = %.3f" % (valid_acc, valid_auc)
 
     
-def tf_softmax():
+def tf_softmax(unif=False):
     config = Config()
     config.layers = []
     config.l2 = 0.0001
-    train_f, train_l, valid_f, valid_l, _, __ = load_data()
+    config.dropout = 0.0
+    train_f, train_l, valid_f, valid_l, _, __ = load_data(unif)
     with tf.Graph().as_default():
         model = DeepNetModel(config)
         sess = tf.Session()
@@ -36,8 +37,8 @@ def tf_softmax():
         model = model.fit(sess, train_f, train_l, valid_f, valid_l)
 
 
-def sm_logit():
-    train_f, train_l, valid_f, valid_l, _, __ = load_data()
+def sm_logit(unif=False):
+    train_f, train_l, valid_f, valid_l, _, __ = load_data(unif)
     model = sm.Logit(train_l[:, 0], train_f)
     model = model.fit_regularized()
     train_p = model.predict(train_f)

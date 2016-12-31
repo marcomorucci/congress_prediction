@@ -2,16 +2,24 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
 
-def load_data():
-    train_features = np.load("../data/train_feats.npy")
-    train_labels = np.load("../data/train_labels.npy")
-    
-    valid_features = np.load("../data/valid_feats.npy")
-    valid_labels = np.load("../data/valid_labels.npy")
+def load_data(unif=False):
+    if not unif:
+        train_features = np.load("../data/train_feats.npy")
+        train_labels = np.load("../data/train_labels.npy")
+        
+        valid_features = np.load("../data/valid_feats.npy")
+        valid_labels = np.load("../data/valid_labels.npy")
+
+    else:
+        train_features = np.load("../data/unif_train_feats.npy")
+        train_labels = np.load("../data/unif_train_labels.npy")
+        
+        valid_features = np.load("../data/unif_valid_feats.npy")
+        valid_labels = np.load("../data/unif_valid_labels.npy")
 
     test_features = np.load("../data/test_feats.npy")
     test_labels = np.load("../data/test_labels.npy")
-    
+        
     # first is yay second is nay
     train_labels = np.array([(x * 1, -(x - 1)) for x in train_labels])
     valid_labels = np.array([(x * 1, -(x - 1)) for x in valid_labels])

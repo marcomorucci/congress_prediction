@@ -32,7 +32,7 @@ class Layer(object):
 class Config(object):
     batch_size = 64
     n_samples = 90795
-    n_features = 187
+    n_features = 190
     n_classes = 2
     max_epochs = 100
     lr = 1e-2
@@ -132,13 +132,11 @@ class DeepNetModel(Model):
             start_t = time.time()
             avg_loss = self.run_epoch(sess, train_data)
             duration = time.time() - start_t
-            if self.config.verbose:
-                print "Loss at epoch %d: %.2f (%.3f sec)" % (epoch, avg_loss, duration)
             tr_acc, tr_nays, tr_fpr, tr_tpr, tr_auc = self.test_accuracy(sess, train_data)
-            if self.config.verbose:
-                print "Training accuracy %.5f, %d nays predicted, auc: %f" % (tr_acc, tr_nays, tr_auc)
             valid_acc, valid_nays, valid_fpr, valid_tpr, valid_auc = self.test_accuracy(sess, valid_data)
-            if self.config.verbose:
+            if epoch % 10 == 0 and self.config.verbose:
+                print "Loss at epoch %d: %.2f (%.3f sec)" % (epoch, avg_loss, duration)
+                print "Training accuracy %.5f, %d nays predicted, auc: %f" % (tr_acc, tr_nays, tr_auc)
                 print "Validation accuracy %.5f, %d nays predicted, auc: %f" % (valid_acc, valid_nays, valid_auc)
             self.stats["loss"].append(avg_loss)
             self.stats["train_accuracy"].append(tr_acc)
